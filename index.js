@@ -1,14 +1,20 @@
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+
 const app = express();
 const port = process.env.PORT || 5000;
 
 // parser
-app.use(cors());
+app.use(
+  cors({
+    origin: ["http://localhost:5173"], // Your frontend URL
+    credentials: true,
+  })
+);
 app.use(express.json());
 
-const { MongoClient, ServerApiVersion } = require("mongodb");
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.88ffpvi.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -26,10 +32,23 @@ async function run() {
     // await client.connect();
     const database = client.db("my_portfolio_db");
     const technologyCollection = database.collection("technologies");
+    const projectCollection = database.collection("projects");
 
     app.get("/technologies", async (req, res) => {
       const result = await technologyCollection.find().toArray();
       res.send(result);
+    });
+
+    app.get("/projects", async (req, res) => {
+      const projects = await projectCollection.find().toArray();
+      res.send(projects);
+    });
+
+    app.get("/projects/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const project = await projectCollection.findOne(query);
+      res.send(project);
     });
 
     // Send a ping to confirm a successful connection

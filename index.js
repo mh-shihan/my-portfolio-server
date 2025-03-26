@@ -45,6 +45,11 @@ async function run() {
       res.send(projects);
     });
 
+    app.get("/feedbacks", async (req, res) => {
+      const feedbacks = await feedbackCollection.find().toArray();
+      res.send(feedbacks);
+    });
+
     app.get("/projects/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };

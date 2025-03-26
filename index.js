@@ -33,6 +33,7 @@ async function run() {
     const database = client.db("my_portfolio_db");
     const technologyCollection = database.collection("technologies");
     const projectCollection = database.collection("projects");
+    const feedbackCollection = database.collection("feedbacks");
 
     app.get("/technologies", async (req, res) => {
       const result = await technologyCollection.find().toArray();
@@ -49,6 +50,16 @@ async function run() {
       const query = { _id: new ObjectId(id) };
       const project = await projectCollection.findOne(query);
       res.send(project);
+    });
+
+    app.post("/feedbacks", async (req, res) => {
+      try {
+        const feedback = req.body;
+        const result = await feedbackCollection.insertOne(feedback);
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+      }
     });
 
     // Send a ping to confirm a successful connection

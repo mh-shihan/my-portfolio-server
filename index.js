@@ -34,6 +34,7 @@ async function run() {
     const technologyCollection = database.collection("technologies");
     const projectCollection = database.collection("projects");
     const feedbackCollection = database.collection("feedbacks");
+    const messageCollection = database.collection("messages");
 
     app.get("/technologies", async (req, res) => {
       const result = await technologyCollection.find().toArray();
@@ -65,6 +66,12 @@ async function run() {
       } catch (error) {
         console.log(error);
       }
+    });
+
+    app.post("/messages", async (req, res) => {
+      const message = req.body;
+      const result = await messageCollection.insertOne(message);
+      res.send(result);
     });
 
     // Send a ping to confirm a successful connection

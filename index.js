@@ -35,6 +35,7 @@ async function run() {
     const projectCollection = database.collection("projects");
     const feedbackCollection = database.collection("feedbacks");
     const messageCollection = database.collection("messages");
+    const certificateCollection = database.collection("certificates");
 
     app.get("/technologies", async (req, res) => {
       const result = await technologyCollection.find().toArray();
@@ -49,6 +50,11 @@ async function run() {
     app.get("/feedbacks", async (req, res) => {
       const feedbacks = await feedbackCollection.find().toArray();
       res.send(feedbacks);
+    });
+
+    app.get("/certificates", async (req, res) => {
+      const result = await certificateCollection.find().toArray();
+      res.send(result);
     });
 
     app.get("/projects/:id", async (req, res) => {
@@ -71,6 +77,12 @@ async function run() {
     app.post("/messages", async (req, res) => {
       const message = req.body;
       const result = await messageCollection.insertOne(message);
+      res.send(result);
+    });
+
+    app.post("/certificates", async (req, res) => {
+      const certificate = req.body;
+      const result = await certificateCollection.insertOne(certificate);
       res.send(result);
     });
 

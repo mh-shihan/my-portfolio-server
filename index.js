@@ -36,6 +36,7 @@ async function run() {
     const feedbackCollection = database.collection("feedbacks");
     const messageCollection = database.collection("messages");
     const certificateCollection = database.collection("certificates");
+    const userCollection = database.collection("users");
 
     app.get("/technologies", async (req, res) => {
       const result = await technologyCollection.find().toArray();
@@ -62,6 +63,19 @@ async function run() {
       const query = { _id: new ObjectId(id) };
       const project = await projectCollection.findOne(query);
       res.send(project);
+    });
+
+    // Admin Api
+    app.get("/admin/:email", async (req, res) => {
+      const email = req.params.email;
+      const user = await userCollection.findOne({ email });
+
+      let admin = false;
+      if (user) {
+        admin = user.role === "admin";
+      }
+
+      res.send({ admin });
     });
 
     app.post("/feedbacks", async (req, res) => {

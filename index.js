@@ -78,6 +78,17 @@ async function run() {
       res.send({ admin });
     });
 
+    // POST API
+    app.post("/projects", async (res, res) => {
+      try {
+        const project = req.body;
+        const result = await projectCollection.insertOne(project);
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+      }
+    });
+
     app.post("/feedbacks", async (req, res) => {
       try {
         const feedback = req.body;

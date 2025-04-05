@@ -79,7 +79,7 @@ async function run() {
     });
 
     // POST API
-    app.post("/projects", async (res, res) => {
+    app.post("/projects", async (req, res) => {
       try {
         const project = req.body;
         const result = await projectCollection.insertOne(project);
@@ -108,6 +108,12 @@ async function run() {
     app.post("/certificates", async (req, res) => {
       const certificate = req.body;
       const result = await certificateCollection.insertOne(certificate);
+      res.send(result);
+    });
+
+    app.post("/technologies", async (req, res) => {
+      const technology = req.body;
+      const result = await technologyCollection.insertOne(technology);
       res.send(result);
     });
 

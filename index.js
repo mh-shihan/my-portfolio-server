@@ -58,6 +58,11 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/messages", async (req, res) => {
+      const messages = await messageCollection.find().toArray();
+      res.send(messages);
+    });
+
     app.get("/projects/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };

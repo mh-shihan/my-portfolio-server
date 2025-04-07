@@ -37,6 +37,7 @@ async function run() {
     const messageCollection = database.collection("messages");
     const certificateCollection = database.collection("certificates");
     const userCollection = database.collection("users");
+    const blogCollection = database.collection("blogs");
 
     app.get("/technologies", async (req, res) => {
       const result = await technologyCollection.find().toArray();
@@ -68,6 +69,11 @@ async function run() {
       const query = { _id: new ObjectId(id) };
       const project = await projectCollection.findOne(query);
       res.send(project);
+    });
+
+    app.get("/blogs", async (req, res) => {
+      const blogs = await blogCollection.find().toArray();
+      res.send(blogs);
     });
 
     // Admin Api

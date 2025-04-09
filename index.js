@@ -128,6 +128,12 @@ async function run() {
       res.send(result);
     });
 
+    app.post("/blogs", async (req, res) => {
+      const blogs = req.body;
+      const result = await blogCollection.insertOne(blogs);
+      res.send(result);
+    });
+
     // DELETE API
     app.delete("/messages/:id", async (req, res) => {
       const id = req.params.id;

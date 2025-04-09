@@ -140,6 +140,27 @@ async function run() {
       res.send(result);
     });
 
+    // UPDATE API
+    app.patch("/resume/:id", async (req, res) => {
+      const resume = req.body;
+      const id = req.params.id;
+
+      const query = { _id: new ObjectId(id) };
+      const updatedResume = {
+        $set: {
+          resume_url: resume.updated_resume_url,
+        },
+      };
+      const option = { upsert: true };
+
+      const result = await resumeCollection.updateOne(
+        query,
+        updatedResume,
+        option
+      );
+      res.send(result);
+    });
+
     // DELETE API
     app.delete("/messages/:id", async (req, res) => {
       const id = req.params.id;

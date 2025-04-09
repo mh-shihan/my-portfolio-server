@@ -38,6 +38,7 @@ async function run() {
     const certificateCollection = database.collection("certificates");
     const userCollection = database.collection("users");
     const blogCollection = database.collection("blogs");
+    const resumeCollection = database.collection("resume");
 
     app.get("/technologies", async (req, res) => {
       const result = await technologyCollection.find().toArray();
@@ -74,6 +75,11 @@ async function run() {
     app.get("/blogs", async (req, res) => {
       const blogs = await blogCollection.find().toArray();
       res.send(blogs);
+    });
+
+    app.get("/resume", async (req, res) => {
+      const resume = await resumeCollection.findOne();
+      res.send(resume);
     });
 
     // Admin Api

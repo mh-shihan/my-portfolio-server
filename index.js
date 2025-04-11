@@ -9,7 +9,11 @@ const port = process.env.PORT || 5000;
 // parser
 app.use(
   cors({
-    origin: ["http://localhost:5173"], // Your frontend URL
+    origin: [
+      "http://localhost:5173",
+      "https://my-portfolio-79349.web.app",
+      "https://my-portfolio-79349.firebaseapp.com",
+    ], // Your frontend URL
     credentials: true,
   })
 );
@@ -170,10 +174,10 @@ async function run() {
     });
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();

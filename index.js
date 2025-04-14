@@ -81,6 +81,17 @@ async function run() {
       res.send(blogs);
     });
 
+    app.get("/blogs/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const blog = await blogCollection.findOne(query);
+        res.send(blog);
+      } catch (error) {
+        console.log(error.message);
+      }
+    });
+
     app.get("/resume", async (req, res) => {
       const resume = await resumeCollection.findOne();
       res.send(resume);

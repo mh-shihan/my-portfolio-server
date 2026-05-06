@@ -4,7 +4,7 @@ require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 3000;
 
 // parser
 app.use(
@@ -13,9 +13,11 @@ app.use(
       "http://localhost:5173",
       "https://my-portfolio-79349.web.app",
       "https://my-portfolio-79349.firebaseapp.com",
+      "https://shihandev.com",
+      "http://shihandev.com",
     ], // Your frontend URL
     credentials: true,
-  })
+  }),
 );
 app.use(express.json());
 
@@ -171,7 +173,7 @@ async function run() {
       const result = await resumeCollection.updateOne(
         query,
         updatedResume,
-        option
+        option,
       );
       res.send(result);
     });

@@ -9,11 +9,19 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "mongodb": "^6.15.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mh-shihan/my-portfolio-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mh-shihan/my-portfolio-server/issues"
+  },
+  "homepage": "https://github.com/mh-shihan/my-portfolio-server#readme",
+  "description": ""
 }

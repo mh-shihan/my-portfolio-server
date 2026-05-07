@@ -28,6 +28,7 @@ app.use(express.json());
 // Simple in-memory cache
 const cache = {
   technologies: { data: null, timestamp: 0 },
+  projects: { data: null, timestamp: 0 },
   certificates: { data: null, timestamp: 0 },
   resume: { data: null, timestamp: 0 },
 };
@@ -93,7 +94,12 @@ async function run() {
 
     app.get("/projects", async (req, res) => {
       try {
+        const cachedData = getCacheData("projects");
+        if (cachedData) {
+          return res.send(cachedData);
+        }
         const projects = await projectCollection.find().toArray();
+        setCacheData("projects", projects);
         res.send(projects);
       } catch (error) {
         console.error("Error fetching projects:", error);

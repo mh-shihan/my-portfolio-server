@@ -14,7 +14,7 @@ app.use(compression());
 app.use(
   cors({
     origin: [
-      // "http://localhost:5173",
+      "http://localhost:5173",
       // "https://my-portfolio-79349.web.app",
       // "https://my-portfolio-79349.firebaseapp.com",
       "https://shihandev.com",

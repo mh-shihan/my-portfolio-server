@@ -328,17 +328,17 @@ async function run() {
     // console.log(
     //   "Pinged your deployment. You successfully connected to MongoDB!"
     // );
+
+    app.get("/", (req, res) => {
+      res.send("HELLO FROM SHIHAN'S PORTFOLIO SERVER");
+    });
+
+    app.listen(port, () => {
+      console.log(`MY PORTFOLIO SERVER IS LISTENING ON PORT ${port}`);
+    });
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
   }
 }
 run().catch(console.dir);
-
-app.get("/", (req, res) => {
-  res.send("HELLO FROM SHIHAN'S PORTFOLIO SERVER");
-});
-
-app.listen(port, () => {
-  console.log(`MY PORTFOLIO SERVER IS LISTENING ON PORT ${port}`);
-});

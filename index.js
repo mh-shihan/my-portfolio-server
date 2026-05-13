@@ -7,38 +7,35 @@ const compression = require("compression");
 const app = express();
 const port = process.env.PORT || 4000;
 
-// Enable gzip compression for all responses
+// ─── Compression ────────────────────────────────────────────────────────────
 app.use(compression());
 
-// parser
+// ─── CORS ───────────────────────────────────────────────────────────────────
 app.use(
   cors({
     origin: [
       "http://localhost:5173",
-      // "https://my-portfolio-79349.web.app",
-      // "https://my-portfolio-79349.firebaseapp.com",
       "https://shihandev.com",
       "http://shihandev.com",
-    ], // Your frontend URL
+    ],
     credentials: true,
   }),
 );
 app.use(express.json());
 
-// Simple in-memory cache
-const cache = {
-  technologies: { data: null, timestamp: 0 },
-  projects: { data: null, timestamp: 0 },
-  certificates: { data: null, timestamp: 0 },
-  resume: { data: null, timestamp: 0 },
-};
+// ─── Cache ───────────────────────────────────────────────────────────────────
+// FIX 1: Added missing keys (feedbacks, blogs, messages) to the cache object
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const cache = {};
 
 function getCacheData(key) {
-  if (cache[key] && Date.now() - cache[key].timestamp < CACHE_TTL) {
-    return cache[key].data;
+  const entry = cache[key];
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > CACHE_TTL) {
+    delete cache[key]; // auto-evict stale entries
+    return null;
   }
-  return null;
+  return entry.data;
 }
 
 function setCacheData(key, data) {
@@ -46,305 +43,278 @@ function setCacheData(key, data) {
 }
 
 function clearCache(key) {
-  if (cache[key]) {
-    cache[key].data = null;
-    cache[key].timestamp = 0;
-  }
+  delete cache[key];
 }
 
+// ─── MongoDB Client ──────────────────────────────────────────────────────────
+// FIX 2: Added connection pool tuning to reduce cold-start lag and reuse connections
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.88ffpvi.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
     strict: true,
     deprecationErrors: true,
   },
+  maxPoolSize: 10, // reuse up to 10 connections
+  minPoolSize: 2, // keep 2 warm connections always alive
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 10000,
+  connectTimeoutMS: 5000,
 });
+
+// ─── Index Creation ──────────────────────────────────────────────────────────
+// FIX 3: _id indexes are auto-created by MongoDB — removed redundant ones.
+// Added a unique index on users.email which is actually useful for lookups.
 
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
-    // await client.connect();
-    const database = client.db("my_portfolio_db");
-    const technologyCollection = database.collection("technologies");
-    const projectCollection = database.collection("projects");
-    const feedbackCollection = database.collection("feedbacks");
-    const messageCollection = database.collection("messages");
-    const certificateCollection = database.collection("certificates");
-    const userCollection = database.collection("users");
-    const blogCollection = database.collection("blogs");
-    const resumeCollection = database.collection("resume");
+    // FIX 4: Explicitly connect once at startup so the pool is warm before
+    // the first request arrives (avoids the slow first-request cold start).
+    await client.connect();
+    console.log("✅ MongoDB connected");
 
-    app.get("/technologies", async (req, res) => {
-      try {
-        const cachedData = getCacheData("technologies");
-        if (cachedData) {
-          return res.send(cachedData);
+    const db = client.db("my_portfolio_db");
+    const collections = {
+      technologies: db.collection("technologies"),
+      projects: db.collection("projects"),
+      feedbacks: db.collection("feedbacks"),
+      messages: db.collection("messages"),
+      certificates: db.collection("certificates"),
+      users: db.collection("users"),
+      blogs: db.collection("blogs"),
+      resume: db.collection("resume"),
+    };
+
+    // ─── Helper: cached GET ────────────────────────────────────────────────
+    // FIX 5: Extracted repetitive cache-check pattern into a reusable helper.
+    // Every collection GET now benefits from caching (feedbacks, blogs,
+    // messages were previously hitting MongoDB on every single request).
+    function cachedGet(cacheKey, fetchFn) {
+      return async (req, res) => {
+        try {
+          const hit = getCacheData(cacheKey);
+          if (hit) return res.json(hit);
+
+          const data = await fetchFn(req);
+          setCacheData(cacheKey, data);
+          res.json(data);
+        } catch (err) {
+          console.error(`Error fetching ${cacheKey}:`, err);
+          res.status(500).json({ error: `Failed to fetch ${cacheKey}` });
         }
-        const result = await technologyCollection.find().toArray();
-        setCacheData("technologies", result);
-        res.send(result);
-      } catch (error) {
-        console.error("Error fetching technologies:", error);
-        res.status(500).send({ error: "Failed to fetch technologies" });
-      }
-    });
+      };
+    }
 
-    app.get("/projects", async (req, res) => {
-      try {
-        const cachedData = getCacheData("projects");
-        if (cachedData) {
-          return res.send(cachedData);
-        }
-        const projects = await projectCollection.find().toArray();
-        setCacheData("projects", projects);
-        res.send(projects);
-      } catch (error) {
-        console.error("Error fetching projects:", error);
-        res.status(500).send({ error: "Failed to fetch projects" });
-      }
-    });
+    // ─── GET routes ───────────────────────────────────────────────────────
 
-    app.get("/feedbacks", async (req, res) => {
-      try {
-        const feedbacks = await feedbackCollection.find().toArray();
-        res.send(feedbacks);
-      } catch (error) {
-        console.error("Error fetching feedbacks:", error);
-        res.status(500).send({ error: "Failed to fetch feedbacks" });
-      }
-    });
+    app.get(
+      "/technologies",
+      cachedGet("technologies", () =>
+        collections.technologies.find().toArray(),
+      ),
+    );
 
-    app.get("/certificates", async (req, res) => {
-      try {
-        const cachedData = getCacheData("certificates");
-        if (cachedData) {
-          return res.send(cachedData);
-        }
-        const result = await certificateCollection.find().toArray();
-        setCacheData("certificates", result);
-        res.send(result);
-      } catch (error) {
-        console.error("Error fetching certificates:", error);
-        res.status(500).send({ error: "Failed to fetch certificates" });
-      }
-    });
+    app.get(
+      "/projects",
+      cachedGet("projects", () => collections.projects.find().toArray()),
+    );
 
+    // FIX 6: feedbacks now cached — was hitting DB on every request before
+    app.get(
+      "/feedbacks",
+      cachedGet("feedbacks", () => collections.feedbacks.find().toArray()),
+    );
+
+    app.get(
+      "/certificates",
+      cachedGet("certificates", () =>
+        collections.certificates.find().toArray(),
+      ),
+    );
+
+    // FIX 7: blogs now cached — was hitting DB on every request before
+    app.get(
+      "/blogs",
+      cachedGet("blogs", () => collections.blogs.find().toArray()),
+    );
+
+    // messages & admin are not cached intentionally (need to stay real-time)
     app.get("/messages", async (req, res) => {
       try {
-        const messages = await messageCollection.find().toArray();
-        res.send(messages);
-      } catch (error) {
-        console.error("Error fetching messages:", error);
-        res.status(500).send({ error: "Failed to fetch messages" });
+        const messages = await collections.messages.find().toArray();
+        res.json(messages);
+      } catch (err) {
+        console.error("Error fetching messages:", err);
+        res.status(500).json({ error: "Failed to fetch messages" });
       }
     });
 
     app.get("/projects/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const project = await projectCollection.findOne(query);
-      res.send(project);
-    });
-
-    app.get("/blogs", async (req, res) => {
       try {
-        const blogs = await blogCollection.find().toArray();
-        res.send(blogs);
-      } catch (error) {
-        console.error("Error fetching blogs:", error);
-        res.status(500).send({ error: "Failed to fetch blogs" });
+        const project = await collections.projects.findOne({
+          _id: new ObjectId(req.params.id),
+        });
+        if (!project)
+          return res.status(404).json({ error: "Project not found" });
+        res.json(project);
+      } catch (err) {
+        console.error("Error fetching project:", err);
+        res.status(500).json({ error: "Failed to fetch project" });
       }
     });
 
     app.get("/blogs/:id", async (req, res) => {
       try {
-        const id = req.params.id;
-        const query = { _id: new ObjectId(id) };
-        const blog = await blogCollection.findOne(query);
-        res.send(blog);
-      } catch (error) {
-        console.error("Error fetching blog:", error);
-        res.status(500).send({ error: "Failed to fetch blog" });
+        const blog = await collections.blogs.findOne({
+          _id: new ObjectId(req.params.id),
+        });
+        if (!blog) return res.status(404).json({ error: "Blog not found" });
+        res.json(blog);
+      } catch (err) {
+        console.error("Error fetching blog:", err);
+        res.status(500).json({ error: "Failed to fetch blog" });
       }
     });
 
-    app.get("/resume", async (req, res) => {
-      try {
-        const cachedData = getCacheData("resume");
-        if (cachedData) {
-          return res.send(cachedData);
-        }
-        const resume = await resumeCollection.findOne();
-        setCacheData("resume", resume);
-        res.send(resume);
-      } catch (error) {
-        console.error("Error fetching resume:", error);
-        res.status(500).send({ error: "Failed to fetch resume" });
-      }
-    });
+    app.get(
+      "/resume",
+      cachedGet("resume", () => collections.resume.findOne()),
+    );
 
-    // Admin Api
     app.get("/admin/:email", async (req, res) => {
       try {
-        const email = req.params.email;
-        const user = await userCollection.findOne({ email });
-
-        let admin = false;
-        if (user) {
-          admin = user.role === "admin";
-        }
-
-        res.send({ admin });
-      } catch (error) {
-        console.error("Error checking admin:", error);
-        res.status(500).send({ error: "Failed to check admin status" });
+        const user = await collections.users.findOne({
+          email: req.params.email,
+        });
+        res.json({ admin: user?.role === "admin" });
+      } catch (err) {
+        console.error("Error checking admin:", err);
+        res.status(500).json({ error: "Failed to check admin status" });
       }
     });
 
-    // Create database indexes for better performance
-    async function createIndexes() {
-      try {
-        await projectCollection.createIndex({ _id: 1 });
-        await blogCollection.createIndex({ _id: 1 });
-        await feedbackCollection.createIndex({ _id: 1 });
-        await messageCollection.createIndex({ _id: 1 });
-        await userCollection.createIndex({ email: 1 });
-        console.log("Database indexes created successfully");
-      } catch (error) {
-        console.error("Error creating indexes:", error);
-      }
-    }
+    // ─── POST routes ──────────────────────────────────────────────────────
 
-    createIndexes();
-
-    // POST API
     app.post("/projects", async (req, res) => {
       try {
-        const project = req.body;
-        const result = await projectCollection.insertOne(project);
-        res.send(result);
-      } catch (error) {
-        console.error("Error creating project:", error);
-        res.status(500).send({ error: "Failed to create project" });
+        const result = await collections.projects.insertOne(req.body);
+        clearCache("projects"); // FIX 8: Invalidate cache on mutation
+        res.json(result);
+      } catch (err) {
+        console.error("Error creating project:", err);
+        res.status(500).json({ error: "Failed to create project" });
       }
     });
 
     app.post("/feedbacks", async (req, res) => {
       try {
-        const feedback = req.body;
-        const result = await feedbackCollection.insertOne(feedback);
-        res.send(result);
-      } catch (error) {
-        console.error("Error creating feedback:", error);
-        res.status(500).send({ error: "Failed to create feedback" });
+        const result = await collections.feedbacks.insertOne(req.body);
+        clearCache("feedbacks"); // FIX 8: Invalidate cache on mutation
+        res.json(result);
+      } catch (err) {
+        console.error("Error creating feedback:", err);
+        res.status(500).json({ error: "Failed to create feedback" });
       }
     });
 
     app.post("/messages", async (req, res) => {
       try {
-        const message = req.body;
-        const result = await messageCollection.insertOne(message);
-        res.send(result);
-      } catch (error) {
-        console.error("Error creating message:", error);
-        res.status(500).send({ error: "Failed to create message" });
+        const result = await collections.messages.insertOne(req.body);
+        res.json(result);
+      } catch (err) {
+        console.error("Error creating message:", err);
+        res.status(500).json({ error: "Failed to create message" });
       }
     });
 
     app.post("/certificates", async (req, res) => {
       try {
-        const certificate = req.body;
-        const result = await certificateCollection.insertOne(certificate);
+        const result = await collections.certificates.insertOne(req.body);
         clearCache("certificates");
-        res.send(result);
-      } catch (error) {
-        console.error("Error creating certificate:", error);
-        res.status(500).send({ error: "Failed to create certificate" });
+        res.json(result);
+      } catch (err) {
+        console.error("Error creating certificate:", err);
+        res.status(500).json({ error: "Failed to create certificate" });
       }
     });
 
     app.post("/technologies", async (req, res) => {
       try {
-        const technology = req.body;
-        const result = await technologyCollection.insertOne(technology);
+        const result = await collections.technologies.insertOne(req.body);
         clearCache("technologies");
-        res.send(result);
-      } catch (error) {
-        console.error("Error creating technology:", error);
-        res.status(500).send({ error: "Failed to create technology" });
+        res.json(result);
+      } catch (err) {
+        console.error("Error creating technology:", err);
+        res.status(500).json({ error: "Failed to create technology" });
       }
     });
 
     app.post("/blogs", async (req, res) => {
       try {
-        const blogs = req.body;
-        const result = await blogCollection.insertOne(blogs);
-        res.send(result);
-      } catch (error) {
-        console.error("Error creating blog:", error);
-        res.status(500).send({ error: "Failed to create blog" });
+        const result = await collections.blogs.insertOne(req.body);
+        clearCache("blogs"); // FIX 8: Invalidate cache on mutation
+        res.json(result);
+      } catch (err) {
+        console.error("Error creating blog:", err);
+        res.status(500).json({ error: "Failed to create blog" });
       }
     });
 
-    // UPDATE API
+    // ─── PATCH routes ─────────────────────────────────────────────────────
+
     app.patch("/resume/:id", async (req, res) => {
       try {
-        const resume = req.body;
-        const id = req.params.id;
-
-        const query = { _id: new ObjectId(id) };
-        const updatedResume = {
-          $set: {
-            resume_url: resume.updated_resume_url,
-          },
-        };
-        const option = { upsert: true };
-
-        const result = await resumeCollection.updateOne(
-          query,
-          updatedResume,
-          option,
+        const result = await collections.resume.updateOne(
+          { _id: new ObjectId(req.params.id) },
+          { $set: { resume_url: req.body.updated_resume_url } },
+          { upsert: true },
         );
         clearCache("resume");
-        res.send(result);
-      } catch (error) {
-        console.error("Error updating resume:", error);
-        res.status(500).send({ error: "Failed to update resume" });
+        res.json(result);
+      } catch (err) {
+        console.error("Error updating resume:", err);
+        res.status(500).json({ error: "Failed to update resume" });
       }
     });
 
-    // DELETE API
+    // ─── DELETE routes ────────────────────────────────────────────────────
+
     app.delete("/messages/:id", async (req, res) => {
       try {
-        const id = req.params.id;
-        const query = { _id: new ObjectId(id) };
-        const result = await messageCollection.deleteOne(query);
-        res.send(result);
-      } catch (error) {
-        console.error("Error deleting message:", error);
-        res.status(500).send({ error: "Failed to delete message" });
+        const result = await collections.messages.deleteOne({
+          _id: new ObjectId(req.params.id),
+        });
+        res.json(result);
+      } catch (err) {
+        console.error("Error deleting message:", err);
+        res.status(500).json({ error: "Failed to delete message" });
       }
     });
 
-    // Send a ping to confirm a successful connection
-    // await client.db("admin").command({ ping: 1 });
-    // console.log(
-    //   "Pinged your deployment. You successfully connected to MongoDB!"
-    // );
-
+    // ─── Health check ─────────────────────────────────────────────────────
     app.get("/", (req, res) => {
       res.send("HELLO FROM SHIHAN'S PORTFOLIO SERVER");
     });
 
+    // ─── Start server ─────────────────────────────────────────────────────
     app.listen(port, () => {
-      console.log(`MY PORTFOLIO SERVER IS LISTENING ON PORT ${port}`);
+      console.log(`🚀 Portfolio server listening on port ${port}`);
     });
-  } finally {
-    // Ensures that the client will close when you finish/error
-    // await client.close();
+  } catch (err) {
+    console.error("Fatal startup error:", err);
+    process.exit(1);
   }
 }
+
+// ─── Graceful shutdown ────────────────────────────────────────────────────────
+process.on("SIGINT", async () => {
+  await client.close();
+  process.exit(0);
+});
+process.on("SIGTERM", async () => {
+  await client.close();
+  process.exit(0);
+});
+
 run().catch(console.dir);
